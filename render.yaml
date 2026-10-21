@@ -1,0 +1,20 @@
+# Render Blueprint: New → Blueprint → pick this repository.
+# If the hub lives in a sub-folder of a bigger repository, set rootDir to that folder.
+# MongoDB is not hosted by Render: create a free MongoDB Atlas cluster and paste its
+# connection string into MONGO_URL when Render asks.
+services:
+  - type: web
+    name: release-hub
+    runtime: node
+    # rootDir: release_hub
+    plan: free
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: MONGO_DB
+        value: nextup_support
+      - key: MONGO_URL
+        sync: false
