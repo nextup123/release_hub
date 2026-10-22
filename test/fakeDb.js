@@ -93,7 +93,7 @@ class Collection {
 }
 
 function createFakeDb() {
-  const unique = { bug_reports: ['number', 'clientReportId'], update_events: ['clientEventId'] };
+  const unique = { bug_reports: ['number', 'clientReportId'], update_events: ['clientEventId'], attachments: ['clientAttachmentId'] };
   const cols = {};
   return {
     collection: (n) => { cols[n] = cols[n] || new Collection(unique[n]); return cols[n]; },

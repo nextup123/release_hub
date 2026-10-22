@@ -9,6 +9,9 @@ const { createApp } = require('./app');
 // The web server starts straight away, so Render's health check passes and
 // /api/v1/health can say what is wrong while the database is not reachable.
 // The API itself answers 503 until MongoDB is connected; connecting is retried.
+// What this server can do, so the tool and the app can tell an older server apart.
+const VERSION = require('../package.json').version;
+const FEATURES = ['pictures'];
 const state = { db: 'connecting', error: '', since: new Date().toISOString(), attempts: 0 };
 let api = null;
 let client = null;
@@ -17,14 +20,14 @@ const outer = express();
 outer.use(cors());
 outer.get(['/', '/api/v1/health'], (req, res) => {
   // Always 200 so Render keeps the service up and the page can show what is wrong.
-  res.json({ ok: !!api, db: state.db, error: state.error || undefined, attempts: state.attempts, dbName: config.MONGO_DB, time: new Date().toISOString() });
+  res.json({ ok: !!api, version: VERSION, features: FEATURES, db: state.db, error: state.error || undefined, attempts: state.attempts, dbName: config.MONGO_DB, time: new Date().toISOString() });
 });
 outer.use((req, res, next) => {
   if (api) return api(req, res, next);
   res.status(503).json({ error: `The server is running but the database is not ready (${state.db}${state.error ? `: ${state.error}` : ''}).` });
 });
 
-const server = outer.listen(config.PORT, config.HOST, () => console.log(`[HUB] listening on http://${config.HOST}:${config.PORT}/api/v1`));
+const server = outer.listen(config.PORT, config.HOST, () => console.log(`[HUB] version ${VERSION} listening on http://${config.HOST}:${config.PORT}/api/v1`));
 if (config.envFileFound) console.log('[HUB] read settings from .env');
 // Show where it connects, without the user name and password.
 if (config.MONGO_URL) {

@@ -180,6 +180,37 @@ function normaliseBugReport(b, appId) {
   };
 }
 
+// Screenshots sent with a bug report. The apps shrink them first (about 300 KB each).
+const IMAGE_TYPES = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif' };
+const MAX_IMAGES_PER_BUG = 5;
+const MAX_IMAGE_BYTES = 700 * 1024;
+
+/** The real type of an image from its first bytes (the sender's type label is not trusted). */
+function sniffImage(buf) {
+  if (buf.length > 12) {
+    if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'image/jpeg';
+    if (buf.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'image/png';
+    if (buf.subarray(0, 4).toString('latin1') === 'RIFF' && buf.subarray(8, 12).toString('latin1') === 'WEBP') return 'image/webp';
+    if (buf.subarray(0, 3).toString('latin1') === 'GIF') return 'image/gif';
+  }
+  return null;
+}
+
+/** One screenshot: { clientAttachmentId, name, data (base64) }. Returns the stored form with the bytes. */
+function normaliseAttachment(b) {
+  const clientAttachmentId = str(b?.clientAttachmentId, 64);
+  if (clientAttachmentId && !UUID_RE.test(clientAttachmentId)) return { error: 'clientAttachmentId must be a UUID' };
+  const raw = typeof b?.data === 'string' ? b.data.replace(/^data:[^,]*,/, '') : '';
+  if (!raw) return { error: 'data (base64 image) is required' };
+  const bytes = Buffer.from(raw, 'base64');
+  if (bytes.length > MAX_IMAGE_BYTES) return { error: `The image is too large (${Math.round(bytes.length / 1024)} KB). The limit is ${MAX_IMAGE_BYTES / 1024} KB.` };
+  const type = sniffImage(bytes);
+  if (!type) return { error: 'Only JPEG, PNG, WebP or GIF images are accepted' };
+  const base = str(b.name, 200).replace(/[\\/:*?"<>|]+/g, '_') || 'image';
+  const name = /\.[A-Za-z0-9]{2,4}$/.test(base) ? base : `${base}.${IMAGE_TYPES[type]}`;
+  return { value: { clientAttachmentId: clientAttachmentId || null, name, type, size: bytes.length, data: raw.replace(/\s+/g, '') } };
+}
+
 /** Fields the maintainer (mobile app) may change on a bug. */
 function normaliseBugPatch(b) {
   const out = {};
@@ -258,5 +289,6 @@ module.exports = {
   BUG_CATEGORIES, SEVERITIES, FREQUENCIES, BUG_STATUSES, OPEN_BUG_STATUSES,
   UPDATE_RESULTS, UPDATE_KINDS,
   compareVersions,
+  IMAGE_TYPES, MAX_IMAGES_PER_BUG, MAX_IMAGE_BYTES, normaliseAttachment, sniffImage,
   normaliseApp, normaliseRelease, normaliseBugReport, normaliseBugPatch, normaliseHeartbeat, normaliseUpdateEvent,
 };

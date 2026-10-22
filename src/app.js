@@ -1,5 +1,6 @@
 'use strict';
 
+const crypto = require('crypto');
 const express = require('express');
 const cors = require('cors');
 const M = require('./models');
@@ -25,6 +26,7 @@ function createApp({ db }) {
   const machines = db.collection('machines');
   const updateEvents = db.collection('update_events');
   const counters = db.collection('counters');
+  const attachments = db.collection('attachments');
 
   const app = express();
   app.use(cors());
@@ -206,6 +208,50 @@ function createApp({ db }) {
     const r = await bugs.updateOne({ number: req.params.number.toUpperCase() }, { $push: { comments: comment }, $set: { updatedAt: comment.at } });
     if (!r.matchedCount) return res.status(404).json({ error: 'Bug not found' });
     res.status(201).json({ comment });
+  }));
+
+  // ── Screenshots on a bug ────────────────────────────────────
+  // One image per request (base64 in JSON), so a weak connection only repeats one image.
+  // Same clientAttachmentId again → the stored one is returned, nothing is added twice.
+  const attachmentMeta = (a) => ({ id: a._id, name: a.name, type: a.type, size: a.size, url: `/api/v1/attachments/${a._id}`, createdAt: a.createdAt });
+
+  api.post(['/bugs/:number/attachments', '/apps/:appId/bugs/:number/attachments'], wrap(async (req, res) => {
+    const number = req.params.number.toUpperCase();
+    const bug = await bugs.findOne({ number }, { projection: { _id: 1, appId: 1, attachments: 1 } });
+    if (!bug) return res.status(404).json({ error: 'Bug not found' });
+    const { value, error } = M.normaliseAttachment(req.body);
+    if (error) return res.status(400).json({ error });
+    if (value.clientAttachmentId) {
+      const existing = await attachments.findOne({ clientAttachmentId: value.clientAttachmentId }, { projection: { data: 0 } });
+      if (existing) return res.json({ attachment: attachmentMeta(existing), duplicate: true });
+    }
+    if ((bug.attachments || []).length >= M.MAX_IMAGES_PER_BUG) {
+      return res.status(400).json({ error: `A bug can have at most ${M.MAX_IMAGES_PER_BUG} images` });
+    }
+    const now = new Date();
+    const doc = { _id: crypto.randomUUID(), bugNumber: number, appId: bug.appId, ...value, createdAt: now };
+    try {
+      await attachments.insertOne(doc);
+    } catch (err) {
+      if (err.code === 11000 && value.clientAttachmentId) {
+        const existing = await attachments.findOne({ clientAttachmentId: value.clientAttachmentId }, { projection: { data: 0 } });
+        if (existing) return res.json({ attachment: attachmentMeta(existing), duplicate: true });
+      }
+      throw err;
+    }
+    const meta = attachmentMeta(doc);
+    await bugs.updateOne({ _id: bug._id }, { $push: { attachments: meta }, $set: { updatedAt: now } });
+    res.status(201).json({ attachment: meta });
+  }));
+
+  // The image itself. The id is random and only appears on the bug, so the address works in an <img> tag.
+  api.get('/attachments/:id', wrap(async (req, res) => {
+    const a = await attachments.findOne({ _id: req.params.id });
+    if (!a) return res.status(404).json({ error: 'Image not found' });
+    res.set('Content-Type', a.type);
+    res.set('Content-Disposition', `inline; filename="${a.name.replace(/"/g, '')}"`);
+    res.set('Cache-Control', 'private, max-age=86400, immutable');
+    res.send(Buffer.from(a.data, 'base64'));
   }));
 
   // A machine checks on the reports it sent (status, fixed in which version).

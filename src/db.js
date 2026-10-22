@@ -10,6 +10,7 @@ const M = require('./models');
  *   bug_reports    bugs, numbered per app (ECT-12, MAIN-7)
  *   machines       every installed copy that has reported in
  *   update_events  which machine moved to which version, when, and whether it worked
+ *   attachments    screenshots sent with bug reports (base64 in `data`)
  *   counters       per-app bug numbers
  */
 
@@ -84,6 +85,10 @@ const INDEXES = {
     [{ title: 'text', description: 'text', stepsToReproduce: 'text' }, { name: 'bug_text' }],
   ],
   machines: [[{ appId: 1, lastSeenAt: -1 }, {}]],
+  attachments: [
+    [{ bugNumber: 1 }, {}],
+    [{ clientAttachmentId: 1 }, { unique: true, partialFilterExpression: { clientAttachmentId: { $type: 'string' } } }],
+  ],
   update_events: [
     [{ clientEventId: 1 }, { unique: true }],
     [{ appId: 1, finishedAt: -1 }, {}],

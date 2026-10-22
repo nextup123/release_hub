@@ -121,3 +121,34 @@ test('update records and heartbeats feed the dashboard', async () => {
   assert.strictEqual(s.body.failedUpdates.length, 1);
   assert.strictEqual(s.body.bugs.open, 1);
 });
+
+test('screenshots are stored once, checked and served', async () => {
+  const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(200, 7)]);
+  const img = { clientAttachmentId: 'dddddddd-bbbb-4ccc-8ddd-000000000001', name: 'screen 1', data: png.toString('base64') };
+  const a = await call('POST', '/bugs/ECT-2/attachments', img);
+  assert.strictEqual(a.status, 201);
+  assert.strictEqual(a.body.attachment.type, 'image/png');
+  assert.strictEqual(a.body.attachment.name, 'screen 1.png');
+  // Sent again after a lost answer: stored once.
+  const again = await call('POST', '/bugs/ECT-2/attachments', img);
+  assert.strictEqual(again.body.duplicate, true);
+  assert.strictEqual(again.body.attachment.id, a.body.attachment.id);
+  // Not an image, and too large.
+  assert.strictEqual((await call('POST', '/bugs/ECT-2/attachments', { data: Buffer.from('<html>not an image at all</html>').toString('base64') })).status, 400);
+  assert.strictEqual((await call('POST', '/bugs/ECT-2/attachments', { data: Buffer.concat([png, Buffer.alloc(800 * 1024)]).toString('base64') })).status, 400);
+  assert.strictEqual((await call('POST', '/bugs/ECT-99/attachments', img)).status, 404);
+  // The EtherCAT tool sends it under its own app, same result.
+  assert.strictEqual((await call('POST', '/apps/ethercat_config_tool/bugs/ECT-2/attachments', img)).body.duplicate, true);
+  // The bug lists it, and the file comes back as the same bytes.
+  const bug = await call('GET', '/bugs/ECT-2');
+  assert.strictEqual(bug.body.bug.attachments.length, 1);
+  const res = await fetch(`http://127.0.0.1:${server.address().port}${a.body.attachment.url}`);
+  assert.strictEqual(res.headers.get('content-type'), 'image/png');
+  assert.ok(Buffer.from(await res.arrayBuffer()).equals(png));
+  // At most five per bug.
+  for (let i = 0; i < 4; i += 1) {
+    const r = await call('POST', '/bugs/ECT-2/attachments', { name: `n${i}`, data: Buffer.concat([png, Buffer.from([i])]).toString('base64') });
+    assert.strictEqual(r.status, 201);
+  }
+  assert.strictEqual((await call('POST', '/bugs/ECT-2/attachments', { name: 'sixth', data: png.toString('base64') })).status, 400);
+});

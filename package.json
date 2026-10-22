@@ -1,6 +1,6 @@
 {
   "name": "nextup-release-hub",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Release notes, bug reports and update records for the EtherCAT config tool and the main application (Express + MongoDB)",
   "private": true,
   "main": "src/index.js",

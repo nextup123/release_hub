@@ -37,7 +37,8 @@ added later.
    Build command `npm ci`, start command `npm start`, and one environment variable:
    `MONGO_URL` = the Atlas connection string. Optional: `MONGO_DB` (default `nextup_support`).
 3. Open `https://<your-service>.onrender.com/api/v1/health`.
-   `{"ok":true,"db":"connected"}` means it works.
+   `{"ok":true,"version":"1.1.0","features":["pictures"],"db":"connected"}` means it works.
+   No `version` in that answer means Render still runs a copy from before pictures: deploy this version again.
 4. On each robot PC: Software update → Update settings → Report server address
    `https://<your-service>.onrender.com`. In the mobile app: the same address.
 

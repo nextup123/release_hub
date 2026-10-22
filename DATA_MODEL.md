@@ -10,6 +10,7 @@ apps ──┬── releases        what is in each version (features, fixes, n
        ├── bug_reports     problems reported from machines or by you
        ├── machines        every installed copy that has reported in
        └── update_events   which machine moved to which version, when, and whether it worked
+attachments                screenshots of bug reports (image bytes as base64)
 counters                   per-app bug numbers
 ```
 
@@ -96,7 +97,7 @@ Unique on `number`, on `{appId, seq}`, and on `clientReportId`.
 | `reporter` | `{name, company, phone, email}` | | the vendor |
 | `machine` | `{machineId, name, site, hostname, os}` | | which PC it came from |
 | `context` | object | | added by the app if the reporter allows it: drives on the bus and their state, last 20 History entries, controller connected, screen size. Capped at 200 KB |
-| `attachments[]` | `{name,type,size,url}` | | screenshots or logs (stored elsewhere, e.g. GridFS or S3) |
+| `attachments[]` | `{id,name,type,size,url,createdAt}` | | screenshots sent with the report (collection `attachments`); `url` is `/api/v1/attachments/<id>` |
 | `status` | `new` \| `triaged` \| `need_info` \| `in_progress` \| `fixed` \| `released` \| `closed` \| `wont_fix` \| `duplicate` | `new` | open = new, triaged, need_info, in_progress |
 | `assignee` | string \| null | | |
 | `labels` | string[] | | |
@@ -156,6 +157,8 @@ to record who made a change (status history, comments, publishing); without it t
 | `GET /apps/:appId/releases/:version` | |
 | `PUT /apps/:appId/releases/:version` | create or replace; publishing links bugs |
 | `POST /apps/:appId/bugs` | new report (repeat-safe) |
+| `POST /bugs/:number/attachments` | one screenshot: `{clientAttachmentId, name, data}` (base64 JPEG, PNG, WebP or GIF, up to 700 KB, 5 per bug). Repeat-safe. Also at `/apps/:appId/bugs/:number/attachments` |
+| `GET /attachments/:id` | the image itself, with its content type (the random id is the access) |
 | `GET /apps/:appId/bugs?status=open&severity=high&q=&machineId=&page=` | list with filters, 30 per page |
 | `GET /bugs/:number` | full report |
 | `PATCH /bugs/:number` | status, priority, assignee, labels, fixedInVersion, duplicateOf, note |
